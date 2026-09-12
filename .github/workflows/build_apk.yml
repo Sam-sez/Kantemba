@@ -1,0 +1,49 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      # This repo only tracks pubspec.yaml + lib/ (see .gitignore) — the
+      # native android/ folder is generated fresh on every build, since it's
+      # boilerplate Flutter can regenerate and doesn't need to live in git.
+      - name: Generate Android platform folder
+        run: flutter create --platforms=android --org com.kantemba .
+
+      # mobile_scanner needs camera access — inject the permission into the
+      # freshly generated manifest before building.
+      - name: Add camera permission
+        run: |
+          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kantemba-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
