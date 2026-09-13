@@ -4,12 +4,11 @@ import '../theme.dart';
 import '../db/database_helper.dart';
 import '../widgets/common.dart';
 
-class CashBookScreen extends StatefulWidget {
-  final bool embedded;
-  const CashBookScreen({super.key, this.embedded = false});
+class CashBookBody extends StatefulWidget {
+  const CashBookBody({super.key});
 
   @override
-  State<CashBookScreen> createState() => _CashBookScreenState();
+  State<CashBookBody> createState() => _CashBookBodyState();
 }
 
 enum _Period { today, week, month, year, all }
@@ -30,11 +29,18 @@ const _typeLabels = {
   'creditor_payments': 'Creditor Payments',
 };
 
-class _CashBookScreenState extends State<CashBookScreen> {
+class _CashBookBodyState extends State<CashBookBody> {
   _Period _period = _Period.month;
   String _typeFilter = 'all';
   List<CashBookEntry> _entries = [];
   bool _loading = true;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -67,6 +73,11 @@ class _CashBookScreenState extends State<CashBookScreen> {
     setState(() {
       _entries = entries;
       _loading = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
     });
   }
 
@@ -161,32 +172,35 @@ class _CashBookScreenState extends State<CashBookScreen> {
     final balanceLabel = _typeFilter == 'all' ? 'Balance' : _typeLabels[_typeFilter]!;
     final dateFmt = DateFormat('MMM d · h:mm a');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cash Book'),
-        automaticallyImplyLeading: !widget.embedded,
-        actions: [
-          TextButton.icon(
-            onPressed: _openFilter,
-            icon: const Icon(Icons.filter_list, color: KColors.textSecondary, size: 18),
-            label: Text('${_periodLabels[_period]} · ${_typeLabels[_typeFilter]}',
-                style: const TextStyle(color: KColors.textSecondary, fontSize: 12)),
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: KColors.greenBright));
+    }
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 16, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Cash Book', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: KColors.textPrimary)),
+              TextButton.icon(
+                onPressed: _openFilter,
+                icon: const Icon(Icons.filter_list, color: KColors.textSecondary, size: 18),
+                label: Text('${_periodLabels[_period]} · ${_typeLabels[_typeFilter]}',
+                    style: const TextStyle(color: KColors.textSecondary, fontSize: 12)),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: KColors.greenBright))
-          : Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: KColors.card, borderRadius: BorderRadius.circular(10)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Opening balance', style: TextStyle(color: KColors.textSecondary, fontWeight: FontWeight.w700)),
+        ),
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: KColors.card, borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Opening balance', style: TextStyle(color: KColors.textSecondary, fontWeight: FontWeight.w700)),
                       const Text('K0', style: TextStyle(fontWeight: FontWeight.w800)),
                     ],
                   ),
@@ -208,10 +222,11 @@ class _CashBookScreenState extends State<CashBookScreen> {
                   child: _entries.isEmpty
                       ? const Center(child: Text('No transactions in this range', style: TextStyle(color: KColors.textSecondary)))
                       : ListView.builder(
+                          controller: _scrollController,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _entries.length,
                           itemBuilder: (ctx, i) {
-                            final e = _entries[_entries.length - 1 - i]; // most recent first
+                            final e = _entries[i]; // oldest first, most recent at the bottom
                             return Container(
                               color: i.isOdd ? KColors.rowAlt : Colors.transparent,
                               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -245,7 +260,20 @@ class _CashBookScreenState extends State<CashBookScreen> {
                   child: Text('$balanceLabel updates live as entries are logged', style: const TextStyle(fontSize: 11, color: KColors.textSecondary)),
                 ),
               ],
-            ),
+    );
+  }
+}
+
+/// Standalone full-page version — used when Cash Book is pushed on top of
+/// the shell (e.g. Dashboard's "See more", Profile's "View All") rather
+/// than reached via the persistent bottom nav.
+class CashBookScreen extends StatelessWidget {
+  const CashBookScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: SafeArea(child: CashBookBody()),
     );
   }
 }

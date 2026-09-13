@@ -5,7 +5,7 @@ import '../models/business.dart';
 import '../db/database_helper.dart';
 import '../widgets/common.dart';
 import 'settings_screen.dart';
-import 'main_tabs_screen.dart';
+import 'charts_screen.dart';
 import 'cash_book_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -173,7 +173,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Stats',
             trailing: GestureDetector(
               onTap: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => const MainTabsScreen(initialIndex: 0)));
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const ChartsScreen()));
               },
               child: const Text('View All', style: TextStyle(color: KColors.greenBright, fontWeight: FontWeight.w700, fontSize: 13)),
             ),

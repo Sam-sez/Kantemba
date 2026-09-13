@@ -2,21 +2,20 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../db/database_helper.dart';
 import '../widgets/common.dart';
-import 'main_tabs_screen.dart';
-import 'new_sale_screen.dart';
-import 'inventory_screen.dart';
-import 'creditors_screen.dart';
-import 'profile_screen.dart';
 import 'cash_book_screen.dart';
 
-class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+/// Dashboard content only — the persistent top bar, bottom nav, and New
+/// Sale FAB now live in AppShell, since blueprint section 5 treats those as
+/// persistent everywhere, not Dashboard-specific chrome.
+class DashboardBody extends StatefulWidget {
+  final VoidCallback? onOpenNotifications;
+  const DashboardBody({super.key, this.onOpenNotifications});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<DashboardBody> createState() => DashboardBodyState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class DashboardBodyState extends State<DashboardBody> {
   double _todaysSales = 0;
   double _outstandingCredit = 0;
   int _lowStockCount = 0;
@@ -26,15 +25,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    reload();
   }
 
-  Future<void> _load() async {
+  Future<void> reload() async {
     final db = DatabaseHelper.instance;
     final sales = await db.getTodaysSalesTotal();
     final credit = await db.getTotalOutstandingCredit();
     final lowStock = await db.getLowStockItems();
-    final recent = await db.getRecentActivity(limit: 6);
+    final recent = await db.getRecentActivity(limit: 8);
     if (!mounted) return;
     setState(() {
       _todaysSales = sales;
@@ -45,167 +44,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Future<void> _openNewSale() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const NewSaleScreen()));
-    _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text('Kantemba'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.people_alt_outlined),
-            tooltip: 'Creditors',
-            onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const CreditorsScreen()));
-              _load();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            tooltip: 'Notifications',
-            onPressed: () => _showNotifications(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'Profile',
-            onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-              _load();
-            },
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openNewSale,
-        icon: const Icon(Icons.add_shopping_cart),
-        label: const Text('New Sale', style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: KColors.greenBright))
-          : RefreshIndicator(
-              onRefresh: _load,
-              color: KColors.greenBright,
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 100),
-                children: [
-                  SizedBox(
-                    height: 110,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      children: [
-                        StatCard(icon: Icons.trending_up, iconColor: KColors.greenBright, value: fmtZMW(_todaysSales), label: "Today's Sales"),
-                        const SizedBox(width: 10),
-                        StatCard(
-                          icon: Icons.people_outline,
-                          iconColor: KColors.red,
-                          value: fmtZMW(_outstandingCredit),
-                          label: 'Outstanding Credit',
-                          valueColor: _outstandingCredit > 0 ? KColors.red : null,
-                        ),
-                        const SizedBox(width: 10),
-                        StatCard(
-                          icon: Icons.inventory_2_outlined,
-                          iconColor: _lowStockCount > 0 ? KColors.red : KColors.textSecondary,
-                          value: '$_lowStockCount',
-                          label: 'Low Stock',
-                          valueColor: _lowStockCount > 0 ? KColors.red : null,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _navGrid(context),
-                  SectionLabel(
-                    'Recent Transactions',
-                    trailing: GestureDetector(
-                      onTap: () async {
-                        await Navigator.push(context, MaterialPageRoute(builder: (_) => const CashBookScreen()));
-                        _load();
-                      },
-                      child: const Text('See more', style: TextStyle(color: KColors.greenBright, fontWeight: FontWeight.w700, fontSize: 13)),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _recent.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
-                            child: Text('No transactions yet — tap New Sale to get started.',
-                                style: TextStyle(color: KColors.textSecondary)),
-                          )
-                        : ZebraCard(
-                            children: _recent
-                                .map((a) => ListTile(
-                                      leading: CircleAvatar(
-                                        backgroundColor: KColors.bg,
-                                        child: Icon(typeIcon(a.type), size: 18, color: typeColor(a.type)),
-                                      ),
-                                      title: Text(a.label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                                      subtitle: Text(a.detail, style: const TextStyle(color: KColors.textSecondary, fontSize: 12)),
-                                      trailing: Text(
-                                        '${a.isOutflow ? '-' : ''}${fmtZMW(a.amount)}',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          color: a.isOutflow ? KColors.red : KColors.textPrimary,
-                                        ),
-                                      ),
-                                    ))
-                                .toList(),
-                          ),
-                  ),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _navGrid(BuildContext context) {
-    Widget tile(IconData icon, String label, int tabIndex) {
-      return Expanded(
-        child: InkWell(
-          onTap: () async {
-            await Navigator.push(context, MaterialPageRoute(builder: (_) => MainTabsScreen(initialIndex: tabIndex)));
-            _load();
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(color: KColors.card, borderRadius: BorderRadius.circular(12)),
-            child: Column(
-              children: [
-                Icon(icon, color: KColors.greenBright, size: 20),
-                const SizedBox(height: 6),
-                Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: KColors.textPrimary)),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          tile(Icons.show_chart, 'Charts', 0),
-          tile(Icons.menu_book, 'Cash Book', 1),
-          tile(Icons.inventory_2, 'Inventory', 2),
-          tile(Icons.call_made, 'Outgoings', 3),
-        ],
-      ),
-    );
-  }
-
-  void _showNotifications(BuildContext context) async {
+  void showNotifications() async {
     final lowStock = await DatabaseHelper.instance.getLowStockItems();
-    if (!context.mounted) return;
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: KColors.card,
@@ -234,6 +75,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   )),
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: KColors.greenBright));
+    }
+    return RefreshIndicator(
+      onRefresh: reload,
+      color: KColors.greenBright,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 100, top: 8),
+        children: [
+          SizedBox(
+            height: 110,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              children: [
+                StatCard(icon: Icons.trending_up, iconColor: KColors.greenBright, value: fmtZMW(_todaysSales), label: "Today's Sales"),
+                const SizedBox(width: 10),
+                StatCard(
+                  icon: Icons.people_outline,
+                  iconColor: KColors.red,
+                  value: fmtZMW(_outstandingCredit),
+                  label: 'Outstanding Credit',
+                  valueColor: _outstandingCredit > 0 ? KColors.red : null,
+                ),
+                const SizedBox(width: 10),
+                StatCard(
+                  icon: Icons.inventory_2_outlined,
+                  iconColor: _lowStockCount > 0 ? KColors.red : KColors.textSecondary,
+                  value: '$_lowStockCount',
+                  label: 'Low Stock',
+                  valueColor: _lowStockCount > 0 ? KColors.red : null,
+                ),
+              ],
+            ),
+          ),
+          SectionLabel(
+            'Recent Transactions',
+            trailing: GestureDetector(
+              onTap: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const CashBookScreen()));
+                reload();
+              },
+              child: const Text('See more', style: TextStyle(color: KColors.greenBright, fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _recent.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text('No transactions yet — tap New Sale to get started.', style: TextStyle(color: KColors.textSecondary)),
+                  )
+                : ZebraCard(
+                    children: _recent
+                        .map((a) => ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: KColors.bg,
+                                child: Icon(typeIcon(a.type), size: 18, color: typeColor(a.type)),
+                              ),
+                              title: Text(a.label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                              subtitle: Text(a.detail, style: const TextStyle(color: KColors.textSecondary, fontSize: 12)),
+                              trailing: Text(
+                                '${a.isOutflow ? '-' : ''}${fmtZMW(a.amount)}',
+                                style: TextStyle(fontWeight: FontWeight.w800, color: a.isOutflow ? KColors.red : KColors.textPrimary),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+          ),
+        ],
       ),
     );
   }

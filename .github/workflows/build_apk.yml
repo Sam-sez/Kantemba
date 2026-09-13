@@ -29,11 +29,12 @@ jobs:
       - name: Generate Android platform folder
         run: flutter create --platforms=android --org com.kantemba .
 
-      # mobile_scanner needs camera access — inject the permission into the
-      # freshly generated manifest before building.
-      - name: Add camera permission
+      # mobile_scanner needs camera access, and the barcode name lookup
+      # needs internet access — inject both permissions into the freshly
+      # generated manifest before building.
+      - name: Add permissions
         run: |
-          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <application#' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get

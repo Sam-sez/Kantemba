@@ -8,38 +8,42 @@ import '../widgets/common.dart';
 import '../widgets/new_item_sheet.dart';
 import '../widgets/barcode_scanner_sheet.dart';
 
-class OutgoingsScreen extends StatefulWidget {
-  final bool embedded;
-  const OutgoingsScreen({super.key, this.embedded = false});
+class OutgoingsBody extends StatefulWidget {
+  const OutgoingsBody({super.key});
 
   @override
-  State<OutgoingsScreen> createState() => _OutgoingsScreenState();
+  State<OutgoingsBody> createState() => _OutgoingsBodyState();
 }
 
-class _OutgoingsScreenState extends State<OutgoingsScreen> with SingleTickerProviderStateMixin {
+class _OutgoingsBodyState extends State<OutgoingsBody> with SingleTickerProviderStateMixin {
   late final TabController _tabController = TabController(length: 2, vsync: this);
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Outgoings'),
-          automaticallyImplyLeading: !widget.embedded,
-          bottom: TabBar(
-            controller: _tabController,
-            labelColor: KColors.greenBright,
-            unselectedLabelColor: KColors.textSecondary,
-            indicatorColor: KColors.greenBright,
-            tabs: const [Tab(text: 'Purchases'), Tab(text: 'Expenses')],
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+          child: Row(
+            children: const [
+              Text('Outgoings', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: KColors.textPrimary)),
+            ],
           ),
         ),
-        body: TabBarView(
+        TabBar(
           controller: _tabController,
-          children: const [_PurchasesTab(), _ExpensesTab()],
+          labelColor: KColors.greenBright,
+          unselectedLabelColor: KColors.textSecondary,
+          indicatorColor: KColors.greenBright,
+          tabs: const [Tab(text: 'Purchases'), Tab(text: 'Expenses')],
         ),
-      ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: const [_PurchasesTab(), _ExpensesTab()],
+          ),
+        ),
+      ],
     );
   }
 }

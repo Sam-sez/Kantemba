@@ -662,15 +662,18 @@ class DatabaseHelper {
     final saleRows = await db.query('sales', orderBy: 'timestamp DESC', limit: limit);
     for (final r in saleRows) {
       final sale = Sale.fromMap(r);
-      final lineCount = Sqflite.firstIntValue(await db.rawQuery(
-        'SELECT COUNT(*) FROM sale_line_items WHERE sale_id = ?',
-        [sale.id],
-      ));
+      final lineRows = await db.query('sale_line_items', where: 'sale_id = ?', whereArgs: [sale.id]);
+      final parts = <String>[];
+      for (final l in lineRows) {
+        final item = await getItemById(l['item_id'] as int);
+        final qty = l['quantity'] as int;
+        parts.add(qty > 1 ? '${qty}x ${item?.name ?? 'item'}' : (item?.name ?? 'item'));
+      }
       entries.add(ActivityEntry(
         timestamp: sale.timestamp,
         type: sale.isCredit ? 'credit_sale' : 'sale',
         label: sale.isCredit ? 'Credit sale' : '${paymentMethodLabel(sale.paymentMethod)} sale',
-        detail: '${lineCount ?? 0} item${(lineCount ?? 0) == 1 ? '' : 's'}',
+        detail: parts.isEmpty ? 'No items' : parts.join(', '),
         amount: sale.totalAmount,
       ));
     }

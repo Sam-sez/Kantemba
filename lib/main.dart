@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/app_shell.dart';
 
 void main() {
   runApp(const KantembaApp());
@@ -15,7 +15,7 @@ class KantembaApp extends StatelessWidget {
       title: 'Kantemba',
       debugShowCheckedModeBanner: false,
       theme: buildKantembaTheme(),
-      home: const DashboardScreen(),
+      home: const AppShell(),
     );
   }
 }

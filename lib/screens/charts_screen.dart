@@ -5,12 +5,11 @@ import '../theme.dart';
 import '../db/database_helper.dart';
 import '../widgets/common.dart';
 
-class ChartsScreen extends StatefulWidget {
-  final bool embedded;
-  const ChartsScreen({super.key, this.embedded = false});
+class ChartsBody extends StatefulWidget {
+  const ChartsBody({super.key});
 
   @override
-  State<ChartsScreen> createState() => _ChartsScreenState();
+  State<ChartsBody> createState() => _ChartsBodyState();
 }
 
 enum _Period { today, week, month, year, all }
@@ -23,7 +22,7 @@ const _periodLabels = {
   _Period.all: 'All time',
 };
 
-class _ChartsScreenState extends State<ChartsScreen> {
+class _ChartsBodyState extends State<ChartsBody> {
   _Period _period = _Period.month;
   String _typeFilter = 'all'; // all | sales | purchases | expenses
   ChartAggregate? _agg;
@@ -107,41 +106,52 @@ class _ChartsScreenState extends State<ChartsScreen> {
     }
   }
 
+  String _dayKeyLocal(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  List<FlSpot> _downsample(List<FlSpot> data, int maxPoints) {
+    if (data.length <= maxPoints) return data;
+    final step = (data.length / maxPoints).ceil();
+    final out = <FlSpot>[];
+    for (int i = 0; i < data.length; i += step) {
+      out.add(FlSpot((i / step).floorToDouble(), data[i].y));
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final agg = _agg;
     final prev = _prevAgg;
 
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: !widget.embedded,
-        title: Row(
-          children: const [
-            Icon(Icons.trending_up, color: KColors.greenBright, size: 20),
-            SizedBox(width: 8),
-            Text('Charts'),
-          ],
-        ),
-      ),
-      body: _loading || agg == null
-          ? const Center(child: CircularProgressIndicator(color: KColors.greenBright))
-          : RefreshIndicator(
-              onRefresh: _load,
-              color: KColors.greenBright,
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 32),
-                children: [
-                  _headline(agg, prev),
-                  _periodTabs(),
-                  _chart(agg),
-                  const SizedBox(height: 16),
-                  _statCallouts(agg),
-                  _typeSegmented(),
-                  _productPerformance(agg),
-                  _productList(agg),
-                ],
-              ),
+    if (_loading || agg == null) {
+      return const Center(child: CircularProgressIndicator(color: KColors.greenBright));
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: KColors.greenBright,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 32, top: 8),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 0),
+            child: Row(
+              children: [
+                Icon(Icons.trending_up, color: KColors.greenBright, size: 20),
+                SizedBox(width: 8),
+                Text('Charts', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: KColors.textPrimary)),
+              ],
             ),
+          ),
+          _headline(agg, prev),
+          _periodTabs(),
+          _chart(agg),
+          const SizedBox(height: 16),
+          _statCallouts(agg),
+          _typeSegmented(),
+          _productPerformance(agg),
+          _productList(agg),
+        ],
+      ),
     );
   }
 
@@ -211,14 +221,33 @@ class _ChartsScreenState extends State<ChartsScreen> {
 
   Widget _chart(ChartAggregate agg) {
     final daily = _dailyFor(agg);
-    final keys = daily.keys.toList()..sort();
-    if (keys.isEmpty) {
+    final (start, end) = _range(_period);
+    final rangeStart = _period == _Period.all && daily.isNotEmpty
+        ? DateTime.parse((daily.keys.toList()..sort()).first)
+        : DateTime(start.year, start.month, start.day);
+    final rangeEnd = DateTime(end.year, end.month, end.day);
+    final totalDays = rangeEnd.difference(rangeStart).inDays.clamp(0, 366);
+
+    // Build a complete day-by-day series (missing days = 0) so the chart
+    // always renders as a continuous line/area, even with sparse data —
+    // a single non-zero day among all-zero days previously looked "blank".
+    final keys = <String>[];
+    final values = <double>[];
+    for (int i = 0; i <= totalDays; i++) {
+      final d = rangeStart.add(Duration(days: i));
+      final key = _dayKeyLocal(d);
+      keys.add(key);
+      values.add(daily[key] ?? 0);
+    }
+
+    if (keys.isEmpty || keys.length == 1) {
       return const SizedBox(height: 220, child: Center(child: Text('No data for this period', style: TextStyle(color: KColors.textSecondary))));
     }
-    final spots = <FlSpot>[
-      for (int i = 0; i < keys.length; i++) FlSpot(i.toDouble(), daily[keys[i]]!),
-    ];
-    final maxY = daily.values.fold<double>(0, (m, v) => v > m ? v : m);
+
+    final rawSpots = <FlSpot>[for (int i = 0; i < keys.length; i++) FlSpot(i.toDouble(), values[i])];
+    // Downsample dense ranges (e.g. a full year of daily data) for legibility.
+    final spots = _downsample(rawSpots, 60);
+    final maxY = values.fold<double>(0, (m, v) => v > m ? v : m);
 
     return Column(
       children: [
@@ -409,6 +438,20 @@ class _ChartsScreenState extends State<ChartsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Standalone full-page version — used when Charts is pushed on top of the
+/// shell (e.g. Profile's Stats "View All") rather than reached via the
+/// persistent bottom nav.
+class ChartsScreen extends StatelessWidget {
+  const ChartsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: SafeArea(child: ChartsBody()),
     );
   }
 }
