@@ -24,8 +24,8 @@ ThemeData buildKantembaTheme() {
       surface: KColors.card,
       error: KColors.red,
     ),
-    fontFamily: 'Inter',
     textTheme: base.textTheme.apply(
+      fontFamily: 'Inter',
       bodyColor: KColors.textPrimary,
       displayColor: KColors.textPrimary,
     ),
