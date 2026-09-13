@@ -39,12 +39,19 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build release APK
-        run: flutter build apk --release
+      - name: Build release APK (split per architecture)
+        run: flutter build apk --release --split-per-abi
 
-      - name: Upload APK
+      - name: Upload APK (arm64 — covers virtually all modern phones)
         uses: actions/upload-artifact@v4
         with:
           name: kantemba-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          retention-days: 30
+
+      - name: Upload APK (armeabi-v7a — for older/budget phones)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kantemba-apk-older-phones
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
           retention-days: 30
