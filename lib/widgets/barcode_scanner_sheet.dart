@@ -36,7 +36,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     if (!mounted) return;
     if (status.isGranted) {
       setState(() {
-        _controller = MobileScannerController();
+        _controller = MobileScannerController(
+          cameraResolution: const Size(1280, 720),
+          facing: CameraFacing.back,
+        );
         _permState = _PermState.granted;
       });
     } else if (status.isPermanentlyDenied) {
@@ -70,7 +73,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         fit: StackFit.expand,
         children: [
           if (_permState == _PermState.granted && _controller != null)
-            MobileScanner(controller: _controller!, onDetect: _onDetect)
+            MobileScanner(
+              controller: _controller!,
+              onDetect: _onDetect,
+              errorBuilder: (context, error, child) => _cameraErrorView(error),
+            )
           else if (_permState == _PermState.checking)
             const Center(child: CircularProgressIndicator(color: KColors.greenBright))
           else
@@ -130,6 +137,58 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _cameraErrorView(MobileScannerException error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.orange, size: 40),
+            const SizedBox(height: 14),
+            const Text(
+              'Camera failed to start',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error.errorCode.name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+            if (error.errorDetails?.message != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                error.errorDetails!.message!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: KColors.greenBright),
+              onPressed: () {
+                setState(() {
+                  _controller?.dispose();
+                  _controller = MobileScannerController(
+          cameraResolution: const Size(1280, 720),
+          facing: CameraFacing.back,
+        );
+                });
+              },
+              child: const Text('Retry', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Search instead', style: TextStyle(color: KColors.greenBright, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
