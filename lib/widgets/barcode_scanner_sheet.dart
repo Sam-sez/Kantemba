@@ -36,10 +36,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     if (!mounted) return;
     if (status.isGranted) {
       setState(() {
-        _controller = MobileScannerController(
-          cameraResolution: const Size(1280, 720),
-          facing: CameraFacing.back,
-        );
+        _controller = MobileScannerController();
         _permState = _PermState.granted;
       });
     } else if (status.isPermanentlyDenied) {
@@ -174,10 +171,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               onPressed: () {
                 setState(() {
                   _controller?.dispose();
-                  _controller = MobileScannerController(
-          cameraResolution: const Size(1280, 720),
-          facing: CameraFacing.back,
-        );
+                  _controller = MobileScannerController();
                 });
               },
               child: const Text('Retry', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
