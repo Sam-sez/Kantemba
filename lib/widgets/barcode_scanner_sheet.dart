@@ -23,6 +23,7 @@ enum _PermState { checking, granted, denied, permanentlyDenied }
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   MobileScannerController? _controller;
   bool _handled = false;
+  bool _starting = false;
   _PermState _permState = _PermState.checking;
 
   @override
@@ -36,13 +37,39 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     if (!mounted) return;
     if (status.isGranted) {
       setState(() {
-        _controller = MobileScannerController();
+        _controller = MobileScannerController(autoStart: false);
         _permState = _PermState.granted;
       });
+      _startCamera();
     } else if (status.isPermanentlyDenied) {
       setState(() => _permState = _PermState.permanentlyDenied);
     } else {
       setState(() => _permState = _PermState.denied);
+    }
+  }
+
+  /// mobile_scanner has a well-documented race where the widget's own
+  /// autoStart and a manual/rebuild-triggered start can both fire, producing
+  /// a native NullPointerException (surfaced as a generic error). Taking
+  /// full manual control — autoStart disabled on the widget, exactly one
+  /// guarded start() call here — avoids that race.
+  Future<void> _startCamera() async {
+    if (_starting || _controller == null) return;
+    _starting = true;
+    try {
+      await _controller!.start();
+    } catch (_) {
+      // If a previous session left the controller in a started state,
+      // reset and try once more rather than showing a dead error screen.
+      try {
+        await _controller!.stop();
+        await _controller!.start();
+      } catch (_) {
+        // Give up silently here — the errorBuilder will show whatever
+        // state the MobileScanner widget itself reports.
+      }
+    } finally {
+      _starting = false;
     }
   }
 
@@ -168,11 +195,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: KColors.greenBright),
-              onPressed: () {
-                setState(() {
-                  _controller?.dispose();
-                  _controller = MobileScannerController();
-                });
+              onPressed: () async {
+                _controller?.dispose();
+                setState(() => _controller = MobileScannerController(autoStart: false));
+                await _startCamera();
               },
               child: const Text('Retry', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
             ),
