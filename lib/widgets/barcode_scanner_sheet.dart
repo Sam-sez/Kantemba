@@ -25,6 +25,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   bool _handled = false;
   bool _starting = false;
   _PermState _permState = _PermState.checking;
+  final TextEditingController _manualBarcodeCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -76,6 +77,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   @override
   void dispose() {
     _controller?.dispose();
+    _manualBarcodeCtrl.dispose();
     super.dispose();
   }
 
@@ -166,12 +168,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   }
 
   Widget _cameraErrorView(MobileScannerException error) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
             const Icon(Icons.error_outline, color: Colors.orange, size: 40),
             const SizedBox(height: 14),
             const Text(
@@ -202,14 +203,50 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               },
               child: const Text('Retry', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
             ),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white24),
             const SizedBox(height: 10),
+            const Text(
+              "If your camera keeps failing, you can type the number printed under the barcode instead:",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _manualBarcodeCtrl,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              decoration: InputDecoration(
+                hintText: 'Barcode number',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: Colors.white10,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              ),
+              onSubmitted: (v) {
+                if (v.trim().isNotEmpty) Navigator.pop(context, v.trim());
+              },
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white38)),
+                onPressed: () {
+                  final v = _manualBarcodeCtrl.text.trim();
+                  if (v.isNotEmpty) Navigator.pop(context, v);
+                },
+                child: const Text('Use this number', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(height: 6),
             TextButton(
               onPressed: () => Navigator.pop(context, null),
               child: const Text('Search instead', style: TextStyle(color: KColors.greenBright, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
-      ),
     );
   }
 
