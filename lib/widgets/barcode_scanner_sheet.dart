@@ -7,7 +7,7 @@ import '../theme.dart';
 /// approved New Sale interaction pattern. Pops with the scanned barcode
 /// string, or null if the person backs out.
 ///
-/// Explicitly requests camera permission before starting the camera —
+/// Explicitly requests camera permission before starting the camera â€”
 /// without this, mobile_scanner silently fails into its error state (the
 /// "!" icon) on first launch, which is what "scanning doesn't work" usually
 /// turns out to be.
@@ -23,7 +23,6 @@ enum _PermState { checking, granted, denied, permanentlyDenied }
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   MobileScannerController? _controller;
   bool _handled = false;
-  bool _starting = false;
   _PermState _permState = _PermState.checking;
   final TextEditingController _manualBarcodeCtrl = TextEditingController();
 
@@ -37,40 +36,23 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     final status = await Permission.camera.request();
     if (!mounted) return;
     if (status.isGranted) {
+      // autoStart: true (the default) is intentional here. mobile_scanner
+      // starts the camera itself once the MobileScanner widget is actually
+      // mounted and its native platform view/texture exists. Calling
+      // controller.start() manually right after setState() races ahead of
+      // that â€” setState() only *schedules* the rebuild, it doesn't run it
+      // synchronously â€” so the native side tries to bind the camera to a
+      // view that doesn't exist yet. That's what was producing the
+      // "genericError / getClass() on a null object reference" crash.
+      // Letting the controller auto-start avoids the race entirely.
       setState(() {
-        _controller = MobileScannerController(autoStart: false);
+        _controller = MobileScannerController();
         _permState = _PermState.granted;
       });
-      _startCamera();
     } else if (status.isPermanentlyDenied) {
       setState(() => _permState = _PermState.permanentlyDenied);
     } else {
       setState(() => _permState = _PermState.denied);
-    }
-  }
-
-  /// mobile_scanner has a well-documented race where the widget's own
-  /// autoStart and a manual/rebuild-triggered start can both fire, producing
-  /// a native NullPointerException (surfaced as a generic error). Taking
-  /// full manual control — autoStart disabled on the widget, exactly one
-  /// guarded start() call here — avoids that race.
-  Future<void> _startCamera() async {
-    if (_starting || _controller == null) return;
-    _starting = true;
-    try {
-      await _controller!.start();
-    } catch (_) {
-      // If a previous session left the controller in a started state,
-      // reset and try once more rather than showing a dead error screen.
-      try {
-        await _controller!.stop();
-        await _controller!.start();
-      } catch (_) {
-        // Give up silently here — the errorBuilder will show whatever
-        // state the MobileScanner widget itself reports.
-      }
-    } finally {
-      _starting = false;
     }
   }
 
@@ -109,7 +91,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           else
             _permissionDeniedView(),
 
-          // Targeting frame — enlarged per feedback so it's easier to line
+          // Targeting frame â€” enlarged per feedback so it's easier to line
           // a barcode up inside it.
           if (_permState == _PermState.granted)
             Center(
@@ -196,10 +178,13 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: KColors.greenBright),
-              onPressed: () async {
-                _controller?.dispose();
-                setState(() => _controller = MobileScannerController(autoStart: false));
-                await _startCamera();
+              onPressed: () {
+                // Same reasoning as _requestPermission: swap in a fresh
+                // controller with autoStart left on, and let the widget
+                // (which will rebuild with this new controller) start the
+                // camera itself once it's actually mounted. Do NOT call
+                // start() manually here â€” that reintroduces the race.
+                setState(() => _controller = MobileScannerController());
               },
               child: const Text('Retry', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
             ),
