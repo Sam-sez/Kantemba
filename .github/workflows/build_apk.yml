@@ -36,7 +36,7 @@ jobs:
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <application#' android/app/src/main/AndroidManifest.xml
 
-        - name: Disable R8 minification (mobile_scanner/CameraX/MLKit safety)
+      - name: Disable R8 minification (mobile_scanner/CameraX/MLKit safety)
         run: |
           if [ -f android/app/build.gradle.kts ]; then
             sed -i 's/isMinifyEnabled = true/isMinifyEnabled = false/' android/app/build.gradle.kts
