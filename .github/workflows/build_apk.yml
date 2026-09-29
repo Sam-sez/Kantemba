@@ -50,14 +50,18 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build release APK (split per architecture)
-        run: flutter build apk --release --split-per-abi
+      # Attempt 2: scanner fails only with ML Kit getClass() NPE, a known symptom of
+      # R8 code shrinking stripping ML Kit classes in release builds. Flutter's
+      # --no-shrink turns R8 off. (The earlier sed step did nothing: the generated
+      # gradle file has no minifyEnabled line; Flutter enables R8 by default.)
+      - name: Build release APK (split per architecture, no R8 shrink)
+        run: flutter build apk --release --split-per-abi --no-shrink
 
       - name: Diagnostics - versions and permissions in built APK
         run: |
           echo "=== flutter ==="; flutter --version
           echo "=== plugin versions (pubspec.lock) ==="
-          grep -A3 -E "^  (mobile_scanner|permission_handler):" pubspec.lock || true
+          grep -A8 -E "^  (mobile_scanner|permission_handler):" pubspec.lock || true
           echo "=== sdk levels ==="
           grep -rnE "compileSdk|minSdk|targetSdk|ndkVersion" android/app/build.gradle* android/build.gradle* 2>/dev/null || true
           echo "=== generated manifest ==="
