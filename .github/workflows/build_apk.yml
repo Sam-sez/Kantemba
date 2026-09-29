@@ -23,14 +23,14 @@ jobs:
         with:
           channel: 'stable'
 
-      # This repo only tracks pubspec.yaml + lib/ (see .gitignore) — the
+      # This repo only tracks pubspec.yaml + lib/ (see .gitignore) â€” the
       # native android/ folder is generated fresh on every build, since it's
       # boilerplate Flutter can regenerate and doesn't need to live in git.
       - name: Generate Android platform folder
         run: flutter create --platforms=android --org com.kantemba .
 
       # mobile_scanner needs camera access, and the barcode name lookup
-      # needs internet access — inject both permissions into the freshly
+      # needs internet access â€” inject both permissions into the freshly
       # generated manifest before building.
       - name: Add permissions
         run: |
@@ -53,14 +53,31 @@ jobs:
       - name: Build release APK (split per architecture)
         run: flutter build apk --release --split-per-abi
 
-      - name: Upload APK (arm64 — covers virtually all modern phones)
+      - name: Diagnostics - versions and permissions in built APK
+        run: |
+          echo "=== flutter ==="; flutter --version
+          echo "=== plugin versions (pubspec.lock) ==="
+          grep -A3 -E "^  (mobile_scanner|permission_handler):" pubspec.lock || true
+          echo "=== sdk levels ==="
+          grep -rnE "compileSdk|minSdk|targetSdk|ndkVersion" android/app/build.gradle* android/build.gradle* 2>/dev/null || true
+          echo "=== generated manifest ==="
+          cat android/app/src/main/AndroidManifest.xml
+          echo "=== permissions in release APKs ==="
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)
+          for APK in build/app/outputs/flutter-apk/*-release.apk; do
+            echo "--- $APK ---"
+            "$AAPT2" dump permissions "$APK" | tee perms.txt
+            grep -q "android.permission.CAMERA" perms.txt || { echo "MISSING: CAMERA in $APK"; exit 1; }
+          done
+
+      - name: Upload APK (arm64 â€” covers virtually all modern phones)
         uses: actions/upload-artifact@v4
         with:
           name: kantemba-apk
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           retention-days: 30
 
-      - name: Upload APK (armeabi-v7a — for older/budget phones)
+      - name: Upload APK (armeabi-v7a â€” for older/budget phones)
         uses: actions/upload-artifact@v4
         with:
           name: kantemba-apk-older-phones
