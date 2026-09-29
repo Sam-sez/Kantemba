@@ -55,7 +55,12 @@ jobs:
       # --no-shrink turns R8 off. (The earlier sed step did nothing: the generated
       # gradle file has no minifyEnabled line; Flutter enables R8 by default.)
       - name: Build release APK (split per architecture, no R8 shrink)
-        run: flutter build apk --release --split-per-abi --no-shrink
+        run: flutter build apk --release --split-per-abi --no-shrink --dart-define=BUILD_ID=run${{ github.run_number }}
+
+      # Attempt 3: also build a DEBUG apk (R8 does not run in debug) so we can tell
+      # whether the scanner failure is release-only or a plugin/toolchain problem.
+      - name: Build debug APK (arm64)
+        run: flutter build apk --debug --target-platform android-arm64 --dart-define=BUILD_ID=run${{ github.run_number }}-debug
 
       - name: Diagnostics - versions and permissions in built APK
         run: |
@@ -73,6 +78,13 @@ jobs:
             "$AAPT2" dump permissions "$APK" | tee perms.txt
             grep -q "android.permission.CAMERA" perms.txt || { echo "MISSING: CAMERA in $APK"; exit 1; }
           done
+
+      - name: Upload DEBUG APK (arm64, for isolating the camera bug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kantemba-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
 
       - name: Upload APK (arm64 â€” covers virtually all modern phones)
         uses: actions/upload-artifact@v4
