@@ -18,7 +18,8 @@ void main() {
       AppLog.add('PLATFORM', e.toString(), e, st);
       return true;
     };
-    AppLog.add('BOOT', 'App starting. Android: ${Platform.operatingSystemVersion}');
+    const buildId = String.fromEnvironment('BUILD_ID', defaultValue: 'unknown');
+    AppLog.add('BOOT', 'App starting. Build: $buildId. Mode: ${kReleaseMode ? 'release' : kDebugMode ? 'debug' : 'profile'}. Android: ${Platform.operatingSystemVersion}');
     runApp(const KantembaApp());
   }, (e, st) => AppLog.add('ZONE', e.toString(), e, st));
 }
