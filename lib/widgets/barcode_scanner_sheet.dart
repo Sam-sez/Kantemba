@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../theme.dart';
+import '../app_log.dart';
 
 /// Full-screen camera scan view with a targeting frame + scan line, per the
 /// approved New Sale interaction pattern. Pops with the scanned barcode
 /// string, or null if the person backs out.
 ///
-/// Explicitly requests camera permission before starting the camera â€”
+/// Explicitly requests camera permission before starting the camera -
 /// without this, mobile_scanner silently fails into its error state (the
 /// "!" icon) on first launch, which is what "scanning doesn't work" usually
 /// turns out to be.
@@ -33,18 +34,28 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   }
 
   Future<void> _requestPermission() async {
-    final status = await Permission.camera.request();
+    PermissionStatus status;
+    try {
+      final before = await Permission.camera.status;
+      AppLog.add('SCAN', 'Camera permission BEFORE request: $before');
+      status = await Permission.camera.request();
+      AppLog.add('SCAN', 'Camera permission AFTER request: $status (permanentlyDenied=${status.isPermanentlyDenied})');
+    } catch (e, st) {
+      AppLog.add('SCAN', 'Permission request threw', e, st);
+      return;
+    }
     if (!mounted) return;
     if (status.isGranted) {
       // autoStart: true (the default) is intentional here. mobile_scanner
       // starts the camera itself once the MobileScanner widget is actually
       // mounted and its native platform view/texture exists. Calling
       // controller.start() manually right after setState() races ahead of
-      // that â€” setState() only *schedules* the rebuild, it doesn't run it
-      // synchronously â€” so the native side tries to bind the camera to a
+      // that - setState() only *schedules* the rebuild, it doesn't run it
+      // synchronously - so the native side tries to bind the camera to a
       // view that doesn't exist yet. That's what was producing the
       // "genericError / getClass() on a null object reference" crash.
       // Letting the controller auto-start avoids the race entirely.
+      AppLog.add('SCAN', 'Creating MobileScannerController (autoStart)');
       setState(() {
         _controller = MobileScannerController();
         _permState = _PermState.granted;
@@ -84,14 +95,17 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             MobileScanner(
               controller: _controller!,
               onDetect: _onDetect,
-              errorBuilder: (context, error, child) => _cameraErrorView(error),
+              errorBuilder: (context, error, child) {
+                _logScannerError(error);
+                return _cameraErrorView(error);
+              },
             )
           else if (_permState == _PermState.checking)
             const Center(child: CircularProgressIndicator(color: KColors.greenBright))
           else
             _permissionDeniedView(),
 
-          // Targeting frame â€” enlarged per feedback so it's easier to line
+          // Targeting frame - enlarged per feedback so it's easier to line
           // a barcode up inside it.
           if (_permState == _PermState.granted)
             Center(
@@ -149,6 +163,24 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     );
   }
 
+  String? _lastLoggedError;
+
+  void _logScannerError(MobileScannerException error) {
+    final key = '${error.errorCode.name}|${error.errorDetails?.message}';
+    if (key == _lastLoggedError) return;
+    _lastLoggedError = key;
+    // Log after the frame, never during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppLog.add(
+        'SCAN',
+        'MobileScanner ERROR code=${error.errorCode.name} '
+            'detailsCode=${error.errorDetails?.code} '
+            'message=${error.errorDetails?.message} '
+            'details=${error.errorDetails?.details}',
+      );
+    });
+  }
+
   Widget _cameraErrorView(MobileScannerException error) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
@@ -176,14 +208,21 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               ),
             ],
             const SizedBox(height: 20),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.orange)),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LogScreen())),
+              child: const Text('View / copy logs', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 10),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: KColors.greenBright),
               onPressed: () {
+                AppLog.add('SCAN', 'Retry tapped');
                 // Same reasoning as _requestPermission: swap in a fresh
                 // controller with autoStart left on, and let the widget
                 // (which will rebuild with this new controller) start the
                 // camera itself once it's actually mounted. Do NOT call
-                // start() manually here â€” that reintroduces the race.
+                // start() manually here - that reintroduces the race.
                 setState(() => _controller = MobileScannerController());
               },
               child: const Text('Retry', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
