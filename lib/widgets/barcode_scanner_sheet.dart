@@ -299,7 +299,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                 style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 11),
             TextButton(
               onPressed: () => Navigator.pop(context, null),
               child: const Text('Search instead', style: TextStyle(color: KColors.greenBright, fontWeight: FontWeight.w700)),
