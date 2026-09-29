@@ -36,26 +36,34 @@ jobs:
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <application#' android/app/src/main/AndroidManifest.xml
 
-      - name: Disable R8 minification (mobile_scanner/CameraX/MLKit safety)
+      # Attempt 4: ML Kit barcode classes get stripped by R8 in release builds
+      # (debug works, release throws genericError / getClass() NPE). Keep them.
+      # Replaces the old "disable R8" sed step, which never matched anything.
+      - name: Add R8 keep rules for ML Kit / CameraX (release fix)
         run: |
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/isMinifyEnabled = true/isMinifyEnabled = false/' android/app/build.gradle.kts
-            sed -i 's/isShrinkResources = true/isShrinkResources = false/' android/app/build.gradle.kts 
-          fi
-          if [ -f android/app/build.gradle ]; then
-            sed -i 's/minifyEnabled true/minifyEnabled false/' android/app/build.gradle
-            sed -i 's/shrinkResources true/shrinkResources false/' android/app/build.gradle
-          fi
+          cat > android/app/proguard-rules.pro <<'EOF'
+          -keep class com.google.mlkit.** { *; }
+          -keep class com.google.android.gms.internal.mlkit_** { *; }
+          -keep class androidx.camera.** { *; }
+          -keep class dev.steenbakker.mobile_scanner.** { *; }
+          -keep class com.baseflow.permissionhandler.** { *; }
+          -dontwarn com.google.mlkit.**
+          -dontwarn com.google.android.gms.internal.mlkit_**
+          -dontwarn androidx.camera.**
+          EOF
+          sed -i 's/^          //' android/app/proguard-rules.pro
+          F=android/app/build.gradle.kts
+          test -f "$F" || { echo "ERROR: $F not found"; exit 1; }
+          sed -i '/signingConfig = signingConfigs.getByName("debug")/a\            isMinifyEnabled = true\n            isShrinkResources = false\n            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")' "$F"
+          grep -q 'proguardFiles' "$F" || { echo "ERROR: patch did not apply"; cat "$F"; exit 1; }
+          echo "=== patched build.gradle.kts ==="; cat "$F"
+          echo "=== proguard-rules.pro ==="; cat android/app/proguard-rules.pro
 
       - name: Install dependencies
         run: flutter pub get
 
-      # Attempt 2: scanner fails only with ML Kit getClass() NPE, a known symptom of
-      # R8 code shrinking stripping ML Kit classes in release builds. Flutter's
-      # --no-shrink turns R8 off. (The earlier sed step did nothing: the generated
-      # gradle file has no minifyEnabled line; Flutter enables R8 by default.)
-      - name: Build release APK (split per architecture, no R8 shrink)
-        run: flutter build apk --release --split-per-abi --no-shrink --dart-define=BUILD_ID=run${{ github.run_number }}
+      - name: Build release APK (split per architecture)
+        run: flutter build apk --release --split-per-abi --dart-define=BUILD_ID=run${{ github.run_number }}
 
       # Attempt 3: also build a DEBUG apk (R8 does not run in debug) so we can tell
       # whether the scanner failure is release-only or a plugin/toolchain problem.
@@ -71,6 +79,8 @@ jobs:
           grep -rnE "compileSdk|minSdk|targetSdk|ndkVersion" android/app/build.gradle* android/build.gradle* 2>/dev/null || true
           echo "=== generated manifest ==="
           cat android/app/src/main/AndroidManifest.xml
+          echo "=== R8 ran? (mapping file exists only if minified) ==="
+          ls -la build/app/outputs/mapping/release/ 2>&1 || echo "NO mapping dir -> R8 did NOT run"
           echo "=== permissions in release APKs ==="
           AAPT2=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)
           for APK in build/app/outputs/flutter-apk/*-release.apk; do
